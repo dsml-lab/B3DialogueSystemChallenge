@@ -12,9 +12,9 @@ sys_path_to_root()
 import time
 import sys
 
-#発話生成，対話履歴保存周りのモジュール（自作モジュール）
-from src.modules.chatgpt_client import ChatgptClient
-from src.modules.memory import Memory
+# #発話生成，対話履歴保存周りのモジュール（自作モジュール）
+# from src.modules.chatgpt_client import ChatgptClient
+# from src.modules.memory import Memory
 
 #ログの生成モジュール（自作モジュール）
 from src.modules.log_create import LogCreate
@@ -26,17 +26,22 @@ from Module.oculus_lip_sync import OculusLipSync
 from Module.robot_body_controller import RobotBodyController
 from Module.robot_expression_controller import RobotExpressionController
 
+#発話生成，対話履歴保存周りのモジュール（自作モジュール）
+from src.modules.gpt_utils import *
+
 # 音声合成のパラメータ設定
 pitch = 110 # amazon pollyデフォルト音程は110
 speed = 105 # amazon pollyデフォルト話速は105
 volume = 100 # amazon pollyデフォルト音量は100
 
 # 通信ポート指定
-expression_generator = RobotExpressionController("localhost", 20000)
-motion_generator =RobotBodyController("localhost", 21000)
-speech_generator = SpeechGenerator("localhost", 3456)
-speech_recognition_manager = SpeechRecognitionManager("localhost", 8888)
-oculus_lip_sync = OculusLipSync("localhost", 31000)
+ip = "133.14.215.180"
+# ip = "localhost"
+expression_generator = RobotExpressionController(ip, 20000)
+motion_generator =RobotBodyController(ip, 21000)
+speech_generator = SpeechGenerator(ip, 3456)
+speech_recognition_manager = SpeechRecognitionManager(ip, 8888)
+oculus_lip_sync = OculusLipSync(ip, 31000)
 
 # ログモジュールのオブジェクトを作成
 logcreate = LogCreate()
@@ -49,15 +54,24 @@ def say(text, pitch=pitch, speed=speed, volume=volume):
     logcreate.log_say(text)
 
 # 音声認識
+# def hear():
+#     speech_recognition_manager.client.send('start')# 音声認識を開始するためにサーバへ送信するコマンド 
+#     message = speech_recognition_manager.read_result() # 音声認識
+#     speech_recognition_manager.client.send('stop') # 音声認識を停止するためにサーバへ送信するコマンド
+#     if message:
+#         logcreate.log_hear(message)
+#         return message
+#     else:
+#         print('Error message is Nonetype')
+# 音声認識
 def hear():
-    speech_recognition_manager.client.send('start')# 音声認識を開始するためにサーバへ送信するコマンド 
-    message = speech_recognition_manager.read_result() # 音声認識
-    speech_recognition_manager.client.send('stop') # 音声認識を停止するためにサーバへ送信するコマンド
+    message = input('ユーザー発話: ')
     if message:
         logcreate.log_hear(message)
         return message
     else:
         print('Error message is Nonetype')
+
 
 # 表情生成用の関数
 def robot_face(name):
@@ -112,65 +126,32 @@ def default_pause():
 
 prompt = """
 # 条件
-ユーザとお話ししてください。
+あなたの目的はユーザーと楽しく会話することです。
+最初に挨拶をして、名前を聞いてください。
 """
 
 def main():
-    client = ChatgptClient()
-    memory = Memory()
     default_pause() # デフォルトの姿勢
-    robot_gaze(0, 1.2, 1.5) # 視線を正面に
+    robot_motion('greeting_deep_spine')
 
-    robot_face('MoodBasedFACS') # 表情
+    messages = []
+
     logcreate.log_start_time()
     logcreate.log_prompt(prompt)
-    messages = memory.add("system", prompt)
-    response = client.send(messages) # システム発話（挨拶）の生成
-    start = time.time()
-    
-    robot_motion('greeting_deep') # お辞儀
-    time.sleep(0.2)
-    set_robot_params(0.2, 0.1, 0, 0)
-    
-    robot_gaze(0, 1.2, 1.5) # 視線を正面に
-    time.sleep(2.5)
-    
+
+    messages.append(create_message(ROLE.SYSTEM, prompt)) # 命令プロンプト
+
+    response = get_response(messages, model='gpt-4-0125-preview') # システム発話（挨拶）の生成
     say(response)
-    
-    # 発話ターンの受け渡しを示す振る舞い
-    time.sleep(0.0)
-    robot_motion('greeting_deep_spine')
-    robot_gaze(0, 1.2, 1.5) # 視線を正面に
-    
-    messages = memory.add("AI", response) # システム発話をメモリに格納
+    messages.append(create_message(ROLE.ASSISTANT, response)) # システム発話をメモリに格納
 
     while True:
-        robot_face('fullsmile') # 表情(笑顔)
         user_input = hear() # ユーザ発話
+        messages.append(create_message(ROLE.USER, user_input)) # ユーザ発話をメモリに格納
 
-        # うなずき３回
-        robot_motion('nod_deep')
-        time.sleep(0.5)
-        robot_motion('nod_deep')
-        time.sleep(0.8)
-        robot_motion('nod_deep')
-        robot_gaze(0, 1.2, 1.5) # 視線を正面に
-        
-        messages = memory.add("human", user_input) # ユーザ発話をメモリに格納
-        current_tme = time.time() # 現時点の時刻を取得
-        process_time = current_tme - start#処理時刻を取得
-        print(f"time:{process_time}")
-
-        response = client.send(messages) # システム発話（挨拶）の生成
-        robot_face('MoodBasedFACS') # 表情
+        response = get_response(messages, model='gpt-4-0125-preview') # システム発話（挨拶）の生成
         say(response) # システム発話
-
-        #発話ターンの受け渡しを示す振る舞い
-        time.sleep(0.0)
-        robot_motion('greeting_deep_spine')
-        robot_gaze(0, 1.2, 1.5) # 視線を正面に
-
-        messages = memory.add("AI", response) # システム発話をメモリに格納
+        messages.append(create_message(ROLE.ASSISTANT, response)) # システム発話をメモリに格納
 
 if __name__ == '__main__':
     start() # 各モジュールのTCP通信の開始
@@ -184,14 +165,12 @@ if __name__ == '__main__':
         traceback.print_exc() # ctrl+C時のエラー文をターミナルに表示
         logcreate.log_error(traceback.format_exc()) # ログファイルにエラー文を記述
         stop() # 各モジュールのTCP通信の終了
-        sys.exit()
 
     except Exception:
         import traceback
         traceback.print_exc() # 全てのエラー文をターミナルに表示
         logcreate.log_error(traceback.format_exc()) # ログファイルにエラー文を記述
         stop() # 各モジュールのTCP通信の終了
-        sys.exit()
 
     # 正常終了時の処理
     else:
