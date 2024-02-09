@@ -13,8 +13,9 @@ import time
 import sys
 
 #発話生成，対話履歴保存周りのモジュール（自作モジュール）
-from src.modules.chatgpt_client import ChatgptClient
-from src.modules.memory import Memory
+# from src.modules.chatgpt_client import ChatgptClient
+# from src.modules.memory import Memory
+from src.modules.gpt_utils import *
 
 #ログの生成モジュール（自作モジュール）
 from src.modules.log_create import LogCreate
@@ -24,6 +25,7 @@ logcreate = LogCreate()
 
 #エージェントの発話
 def say(text):
+    print('システム発話:', text)
     logcreate.log_say(text)
 
 # 音声認識
@@ -45,28 +47,29 @@ def stop():
 
 prompt = """
 # 条件
-ユーザとお話ししてください。
+あなたの目的はユーザーと楽しく会話することです。
+最初に挨拶をして、名前を聞いてください。
 """
 
 def main():
-    client = ChatgptClient()
-    memory = Memory()
+    messages = []
 
     logcreate.log_start_time()
     logcreate.log_prompt(prompt)
 
-    messages = memory.add("system", prompt)
-    response = client.send(messages) # システム発話（挨拶）の生成
+    messages.append(create_message(ROLE.SYSTEM, prompt)) # 命令プロンプト
+
+    response = get_response(messages, model='gpt-4-0125-preview') # システム発話（挨拶）の生成
     say(response)
-    messages = memory.add("AI", response) # システム発話をメモリに格納
+    messages.append(create_message(ROLE.ASSISTANT, response)) # システム発話をメモリに格納
 
     while True:
         user_input = hear() # ユーザ発話
-        messages = memory.add("human", user_input) # ユーザ発話をメモリに格納
+        messages.append(create_message(ROLE.USER, user_input)) # ユーザ発話をメモリに格納
 
-        response = client.send(messages) # システム発話（挨拶）の生成
+        response = get_response(messages, model='gpt-4-0125-preview') # システム発話（挨拶）の生成
         say(response) # システム発話
-        messages = memory.add("AI", response) # システム発話をメモリに格納
+        messages.append(create_message(ROLE.ASSISTANT, response)) # システム発話をメモリに格納
 
 if __name__ == '__main__':
     start() # 各モジュールのTCP通信の開始
