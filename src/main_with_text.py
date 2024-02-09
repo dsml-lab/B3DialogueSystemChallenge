@@ -13,8 +13,6 @@ import time
 import sys
 
 #発話生成，対話履歴保存周りのモジュール（自作モジュール）
-# from src.modules.chatgpt_client import ChatgptClient
-# from src.modules.memory import Memory
 from src.modules.gpt_utils import *
 
 #ログの生成モジュール（自作モジュール）
