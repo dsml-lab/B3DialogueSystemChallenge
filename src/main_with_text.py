@@ -115,7 +115,8 @@ AとBに関連性がない場合
 """,
 ]
 
-prompt = prompts[2]
+arg = sys.argv
+prompt = prompts[int(arg[1])]
 
 def main():
     messages = []
